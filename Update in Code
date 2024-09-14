@@ -1,0 +1,251 @@
+import os
+from datetime import datetime
+from datetime import date
+
+FOUND_NAME = False
+FOUND_DATE = False
+FUTURE_DATE = False
+
+def clear_screen():
+    os.system("cls" if os.name == "nt" else "clear")
+    
+def convert_date_blocks(date):
+    global FUTURE_DATE
+    today = datetime.today().date()
+
+    # Convert the input string date (DD/MM/YYYY) to a datetime object
+    user_date_object = datetime.strptime(date, "%d/%m/%Y").date()
+
+    # Check if the input date is in the future
+    if user_date_object > today:
+        FUTURE_DATE = True
+    elif user_date_object <= today: # If user's input date is today then result FUTURE_DATE to be False (Error handling)
+        FUTURE_DATE = False
+
+    # Convert the date object back to a string in the original format (DD/MM/YYYY)
+    formatted_date = user_date_object.strftime("%d/%m/%Y")
+    
+    return formatted_date, FUTURE_DATE
+    
+def Add_Expenses(name):
+    global FOUND_NAME, FOUND_DATE
+    
+    date = input("What was the date of purchase (e.g., DD/MM/YYYY): ").strip()
+    convert_date_blocks(date)
+    if FUTURE_DATE:
+        print("Invalid Date! No future dates allowed.")
+        
+        while FUTURE_DATE == True:
+            date = input("What was the date of purchase (e.g., DD/MM/YYYY): ").strip()
+            convert_date_blocks(date)
+            if FUTURE_DATE:
+                print("Invalid Date! No future dates allowed.")
+                continue
+            else:
+                break
+        
+    while FUTURE_DATE == False:
+        add_new_data = []
+        
+        print("Expense Types: Groceries, Utilities, Entertainment, Petrol, Miscellaneous")
+        expense_type = input("Enter Expense Type: ").strip().lower()
+
+        if expense_type not in ["groceries", "petrol", "utilities", "entertainment", "miscellaneous"]:
+            print("Invalid expense type. Please enter a valid type.")
+            input("Please click enter to continue.")
+            clear_screen()
+            continue
+            
+        # For proper alignment
+        if expense_type == "entertainmnet":
+            add_new_data.append("\tExpense type: Entertainment")
+        else:
+            add_new_data.append(f"\tExpense type: {expense_type.capitalize()}\t")
+
+        if expense_type == "miscellaneous":
+            item_number = 1
+            while True:
+                item = input(f"Enter the name of item {item_number} (or type 'done' to finish): ").strip()
+                if item.lower() == 'done':
+                    break
+                add_new_data.append(f"\n\t\tItem {item_number}: {item}")
+                item_number += 1
+
+            cost = float(input(f"Cost for the items: "))
+            add_new_data.append(f"\n\t\tTotal Cost: {cost}\n")
+            
+        elif expense_type == "entertainment":
+            cost = float(input(f"Cost of {expense_type.capitalize()}: "))
+            add_new_data.append(f"Cost: {cost}\n")
+        else:
+            cost = float(input(f"Cost of {expense_type.capitalize()}: "))
+            add_new_data.append(f"\tCost: {cost}\n")
+
+        with open(file_path, "r+", encoding="utf-8") as file:
+            data = file.read()
+
+            if name in data:
+                FOUND_NAME = True
+
+                if date in data:
+                    FOUND_DATE = True
+
+                # Find the position of the name block
+                name_block_start = data.find(f"Name: {name}")
+                next_name_block = data.find(f"Name:", name_block_start + 1)
+                name_block_end = next_name_block if next_name_block != -1 else len(data)
+                name_block = data[name_block_start:name_block_end]
+
+                # If the date is found within the name block, add the expense to the existing date
+                if date in name_block:
+                    find_date = name_block.find(f"Date: {date}")
+                    line_after_date = name_block.find("\n", find_date) + 1
+                    updated_name_block = name_block[:line_after_date] + ''.join(add_new_data) + name_block[line_after_date:]
+
+                else:
+                    # Add the new date and expense details under the found name
+                    new_date_entry = f"\n    Date: {date}\n" + ''.join(add_new_data)
+                    updated_name_block = name_block + new_date_entry
+
+                # Split and sort the date blocks within the name block
+                date_blocks = updated_name_block.split("    Date: ")[1:]
+                sorted_date_blocks = sorted(date_blocks, key=lambda x: datetime.strptime(x.split("\n")[0], "%d/%m/%Y"))
+
+                # Reconstruct the name block with sorted date blocks
+                sorted_name_block = f"Name: {name}\n" + ''.join([f"    Date: {block}" for block in sorted_date_blocks])
+
+                # Update the full data
+                updated_data = data[:name_block_start] + sorted_name_block + data[name_block_end:]
+
+                # Move the file pointer back to the start and write updated data
+                file.seek(0)
+                file.write(updated_data)
+                file.truncate()  # Ensure any remaining data is removed after writing the update
+                print("Successfully added the transaction.")
+                input("Press enter to continue...")
+                clear_screen()
+                break
+
+            else:
+                # If name not found, add a new entry at the end of the file
+                new_name_entry = f"\nName: {name}\n    Date: {date}\n" + ''.join(add_new_data)
+                file.write(new_name_entry)
+            
+            print("Successfully added the transaction.")
+            input("Press enter to continue...")
+            clear_screen()
+            break
+            
+def report_of_expenses_of_specific_date():
+    specific_date = input("Enter the date for which you want the report (e.g., 08/02/2024): ")
+    clear_screen()
+    
+    with open(file_path, "r", encoding="utf-8") as file:
+        data = file.read()
+        
+        if specific_date in data:
+        
+            # Search for date
+            find_date = data.find(f"Date: {specific_date}")
+            
+            # Search for Next Date block or Name block
+            next_date_block = data.find(f"Date:", find_date + 1)
+            next_name_block = data.find(f"Name:", find_date + 1)
+            
+            if next_date_block == -1 and next_name_block == -1: # If no date and no name block found -> select all the data
+                end_of_date = len(data)
+            elif next_date_block == -1: # If no date block found -> select data till next name block
+                end_of_date = next_name_block
+            elif next_name_block == -1: # If no name block found -> select data till next date block
+                end_of_date = next_date_block
+            else: # Else -> select data till closest block
+                end_of_date = min(next_date_block, next_name_block)
+                
+            report = data[find_date:end_of_date] # Combine the data of specified date
+            print(f"Expenses for {specific_date}:\n")
+            print(report) # Print data of specified date
+            input("Press enter to continue.")
+            clear_screen()
+            
+        else:
+            print("No Date Found.")
+            input("Press enter to continue.")
+            clear_screen()
+            
+def report_of_expenses_between_2_dates():
+    start_date = str(input("Enter first date (e.g., 03/01/2024): "))
+    end_date = str(input("Enter second date(e.g., 07/07/2024): "))
+    clear_screen()
+    
+    #Read the file
+    with open(file_path, "r") as file:
+        data = file.read()
+        
+        if start_date and end_date in data:
+            find_start_date = data.find(f"Date: {start_date}")
+            find_end_date = data.find(f"Date: {end_date}", find_start_date)
+            
+            next_date_block = data.find(f"Date:", find_end_date + 1) # Find the next date block
+            next_name_block = data.find(f"Name:", find_end_date + 1) # Find the next name block
+            
+            if next_date_block == -1 and next_name_block == -1: # If no date and no name block found -> select all the data
+                end_of_range = len(data)
+            elif next_date_block == -1: # If no date block found -> select data till the next name block
+                end_of_range = next_name_block
+            elif next_name_block == -1: # If no name block found -> select data till the next date block
+                end_of_range = next_date_block
+            else: # Else -> select data till the closest block
+                end_of_range = min(next_date_block, next_name_block)
+            
+            report = data[find_start_date:end_of_range]
+            print(f"Expenses between {start_date} and {end_date}:\n")
+            print(report)
+            input("Press enter to clear screen.")
+            clear_screen()
+        else:
+            print("One or Both dates are not in the data.")
+            input("Press enter to clear screen")
+            clear_screen()
+            
+if __name__ == "__main__":
+    file_path = os.path.join(file_path in your computer)
+    
+    clear_screen()
+    name = input("What is your name: ").strip().lower()
+    
+    with open(file_path, "r", encoding="utf-8") as file:
+        data = file.read()
+
+    if name in data:
+        print(f"Welcome back, {name}!")
+    else:
+        print(f"Welcome to Expense Tracker, {name}!")
+    
+    while True:
+        options = "1) Add Expense, 2) Report of Expenses, 3) Transaction Complete"
+        print(options)
+        ans = int(input("Select one of the options (1 or 2 or 3): "))
+        clear_screen()
+
+        if ans == 1:
+            Add_Expenses(name)
+            
+        elif ans == 2:
+            option = "a) Specific Date Report, b) Report Between 2 Dates"
+            print(option)
+            answer = input("Select one of the options (select a or b): ").lower().strip()
+            if answer == "a":
+                clear_screen()
+                report_of_expenses_of_specific_date()
+            elif answer == "b":
+                clear_screen()
+                report_of_expenses_between_2_dates()
+            else:
+                print("Invalid option. Please try again.")
+                
+        elif ans == 3:
+            print(f"Thank you {name.capitalize()}! Your Transactions will be saved.")
+            quit()
+            
+        else:
+            print("Invalid option. Please try again.")
